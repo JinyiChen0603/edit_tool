@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数学题目编辑器</title>
+    
+    <!-- MathJax 配置 -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background: white;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        
+        .search-box {
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .question-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .question-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .question-item:hover {
+            background: #f9f9f9;
+        }
+        
+        .question-item.active {
+            background: #e3f2fd;
+        }
+        
+        .question-id {
+            font-weight: bold;
+            color: #1976d2;
+            margin-bottom: 5px;
+        }
+        
+        .question-title {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            overflow: hidden;
+            min-width: 0;
+        }
+        
+        .editor-header {
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .editor-header h2 {
+            color: #333;
+        }
+        
+        .save-btn {
+            padding: 10px 30px;
+            background: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .save-btn:hover {
+            background: #1565c0;
+        }
+        
+        .save-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .jump-btn {
+            padding: 8px 16px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .jump-btn:hover {
+            background: #45a049;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .jump-btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .editor-body {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 15px 20px;
+            scroll-behavior: smooth;
+            height: 0; /* 配合 flex: 1 确保有固定高度 */
+        }
+        
+        .editor-body::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        .editor-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 5px;
+        }
+        
+        .editor-body::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 5px;
+            border: 2px solid #f1f1f1;
+        }
+        
+        .editor-body::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Firefox 滚动条样式 */
+        .editor-body {
+            scrollbar-width: thin;
+            scrollbar-color: #888 #f1f1f1;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+            color: #555;
+            font-size: 13px;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'Consolas', monospace;
+        }
+        
+        #questionContent {
+            min-height: 100px !important;
+            height: auto;
+        }
+        
+        #solutionContent {
+            min-height: 250px !important;
+            height: auto;
+        }
+        
+        #answerContent {
+            min-height: 80px !important;
+            height: auto;
+        }
+        
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        @media (max-width: 1200px) {
+            .metadata-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .section-header {
+            background: #f5f5f5;
+            padding: 8px 12px;
+            margin: 10px 0 8px 0;
+            border-left: 4px solid #1976d2;
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .preview-toggle {
+            font-size: 12px;
+            color: #1976d2;
+            cursor: pointer;
+            font-weight: normal;
+            user-select: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            transition: background 0.2s;
+        }
+        
+        .preview-toggle:hover {
+            background: rgba(25, 118, 210, 0.1);
+        }
+        
+        .math-note {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
+        }
+        
+        .content-wrapper {
+            position: relative;
+        }
+        
+        .preview-box {
+            display: none;
+            padding: 15px;
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            min-height: 60px;
+            max-height: none;
+            line-height: 1.8;
+            font-size: 14px;
+            color: #333;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        
+        .preview-box.active {
+            display: block;
+        }
+        
+        textarea.hidden {
+            display: none;
+        }
+        
+        .preview-box p {
+            margin-bottom: 12px;
+        }
+        
+        .preview-box p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .preview-box code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', monospace;
+        }
+        
+        /* 数学公式样式优化 */
+        .preview-box .MathJax {
+            font-size: 1.1em !important;
+        }
+        
+        /* 特殊符号和列表格式 */
+        .preview-box ul, .preview-box ol {
+            margin-left: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .preview-box li {
+            margin-bottom: 5px;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #999;
+        }
+        
+        #editorSection {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        #editorSection[style*="display: none"] {
+            display: none !important;
+        }
+        
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+        }
+        
+        .help-tip {
+            background: #e3f2fd;
+            border-left: 3px solid #1976d2;
+            padding: 10px 15px;
+            margin: 10px 0;
+            font-size: 12px;
+            color: #555;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .help-tip strong {
+            color: #1976d2;
+        }
+        
+        .message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: #4caf50;
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="搜索题目ID、标题或内容...">
+        </div>
+        <div class="question-list" id="questionList">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div id="emptyState" class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <p>请从左侧选择一道题目开始编辑</p>
+        </div>
+        
+        <div id="editorSection" style="display: none;">
+            <div class="editor-header">
+                <h2 id="editorTitle">编辑题目</h2>
+                <div class="btn-group">
+                    <button class="jump-btn" onclick="toggleAllPreview()">👁️ 全部预览</button>
+                    <button class="jump-btn" onclick="scrollToSection('top')">⬆️ 顶部</button>
+                    <button class="jump-btn" onclick="scrollToSection('answer')">⬇️ 答案</button>
+                    <button class="save-btn" id="saveBtn">保存修改</button>
+                </div>
+            </div>
+            <div class="editor-body">
+                <div class="help-tip">
+                    💡 <strong>提示：</strong>使用 <strong>滚轮</strong> 或滚动条浏览所有内容。点击 <strong>👁️ 预览/编辑</strong> 切换查看数学公式渲染效果。使用顶部按钮快速导航。
+                </div>
+                
+                <div class="section-header">📋 题目信息</div>
+                <div class="form-group">
+                    <label>标题</label>
+                    <input type="text" id="metaTitle">
+                </div>
+                <div class="metadata-grid">
+                    <div class="form-group">
+                        <label>ID</label>
+                        <input type="text" id="metaId" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>题型</label>
+                        <input type="text" id="metaQuestionType">
+                    </div>
+                    <div class="form-group">
+                        <label>难度</label>
+                        <input type="text" id="metaDifficulty">
+                    </div>
+                    <div class="form-group">
+                        <label>领域</label>
+                        <input type="text" id="metaDomain">
+                    </div>
+                    <div class="form-group">
+                        <label>知识点</label>
+                        <input type="text" id="metaKnowledgePoint">
+                    </div>
+                    <div class="form-group">
+                        <label>出题老师</label>
+                        <input type="text" id="metaTeacher">
+                    </div>
+                </div>
+                
+                <div class="section-header">
+                    <span>📝 题目内容</span>
+                    <span class="preview-toggle" onclick="togglePreview('question')">👁️ 预览/编辑</span>
+                </div>
+                <div class="form-group content-wrapper">
+                    <textarea id="questionContent"></textarea>
+                    <div id="questionPreview" class="preview-box"></div>
+                </div>
+                
+                <div class="section-header">
+                    <span>💡 解答过程</span>
+                    <span class="preview-toggle" onclick="togglePreview('solution')">👁️ 预览/编辑</span>
+                </div>
+                <div class="form-group content-wrapper">
+                    <textarea id="solutionContent"></textarea>
+                    <div id="solutionPreview" class="preview-box"></div>
+                </div>
+                
+                <div class="section-header">
+                    <span>✅ 最终答案</span>
+                    <span class="preview-toggle" onclick="togglePreview('answer')">👁️ 预览/编辑</span>
+                </div>
+                <div class="form-group content-wrapper">
+                    <textarea id="answerContent"></textarea>
+                    <div id="answerPreview" class="preview-box"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allQuestions = [];
+        let currentQuestion = null;
+        let previewStates = {
+            question: false,
+            solution: false,
+            answer: false
+        };
+        
+        // 切换预览/编辑模式
+        function togglePreview(section) {
+            const textarea = document.getElementById(section + 'Content');
+            const preview = document.getElementById(section + 'Preview');
+            
+            previewStates[section] = !previewStates[section];
+            
+            if (previewStates[section]) {
+                // 切换到预览模式
+                textarea.classList.add('hidden');
+                preview.classList.add('active');
+                
+                // 处理文本内容，保留换行和段落
+                let content = textarea.value;
+                // 将双换行转换为段落
+                content = content.replace(/\n\n+/g, '</p><p>');
+                // 将单换行转换为 <br>
+                content = content.replace(/\n/g, '<br>');
+                // 包裹在段落标签中
+                preview.innerHTML = '<p>' + content + '</p>';
+                
+                // 渲染数学公式
+                if (typeof MathJax !== 'undefined') {
+                    MathJax.typesetPromise([preview]).catch((err) => console.log('MathJax error:', err));
+                }
+            } else {
+                // 切换到编辑模式
+                textarea.classList.remove('hidden');
+                preview.classList.remove('active');
+            }
+        }
+        
+        // 渲染所有可见的数学公式
+        function renderMath() {
+            if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+                const previews = document.querySelectorAll('.preview-box.active');
+                if (previews.length > 0) {
+                    MathJax.typesetPromise(Array.from(previews)).catch((err) => console.log('MathJax error:', err));
+                }
+            }
+        }
+        
+        // 切换全部预览/编辑
+        function toggleAllPreview() {
+            const allInPreview = previewStates.question && previewStates.solution && previewStates.answer;
+            
+            if (allInPreview) {
+                // 全部切换到编辑模式
+                if (previewStates.question) togglePreview('question');
+                if (previewStates.solution) togglePreview('solution');
+                if (previewStates.answer) togglePreview('answer');
+            } else {
+                // 全部切换到预览模式
+                if (!previewStates.question) togglePreview('question');
+                if (!previewStates.solution) togglePreview('solution');
+                if (!previewStates.answer) togglePreview('answer');
+            }
+        }
+        
+        // 滚动到指定区域
+        function scrollToSection(section) {
+            const editorBody = document.querySelector('.editor-body');
+            
+            if (section === 'top') {
+                editorBody.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            } else if (section === 'answer') {
+                const answerSection = document.getElementById('answerContent').parentElement;
+                const offset = answerSection.offsetTop - editorBody.offsetTop - 20;
+                editorBody.scrollTo({
+                    top: offset,
+                    behavior: 'smooth'
+                });
+            }
+        }
+        
+        async function loadQuestions() {
+            try {
+                const response = await fetch('/api/questions');
+                allQuestions = await response.json();
+                renderQuestionList(allQuestions);
+            } catch (error) {
+                console.error('加载题目失败:', error);
+            }
+        }
+        
+        function renderQuestionList(questions) {
+            const listEl = document.getElementById('questionList');
+            if (questions.length === 0) {
+                listEl.innerHTML = '<div class="loading">没有找到题目</div>';
+                return;
+            }
+            
+            listEl.innerHTML = questions.map(q => `
+                <div class="question-item" data-filename="${q.filename}">
+                    <div class="question-id">题目 ${q.metadata.id}</div>
+                    <div class="question-title">${q.metadata.title}</div>
+                </div>
+            `).join('');
+            
+            listEl.querySelectorAll('.question-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    loadQuestion(item.dataset.filename);
+                    listEl.querySelectorAll('.question-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                });
+            });
+        }
+        
+        async function loadQuestion(filename) {
+            try {
+                const response = await fetch(`/api/question/${filename}`);
+                currentQuestion = await response.json();
+                renderEditor(currentQuestion);
+            } catch (error) {
+                console.error('加载题目失败:', error);
+            }
+        }
+        
+        function renderEditor(question) {
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('editorSection').style.display = '';
+            
+            document.getElementById('editorTitle').textContent = `编辑题目 ${question.metadata.id}`;
+            document.getElementById('metaId').value = question.metadata.id || '';
+            document.getElementById('metaTitle').value = question.metadata.title || '';
+            document.getElementById('metaQuestionType').value = question.metadata.question_type || '';
+            document.getElementById('metaDomain').value = question.metadata.domain || '';
+            document.getElementById('metaDifficulty').value = question.metadata.difficulty || '';
+            document.getElementById('metaKnowledgePoint').value = question.metadata.knowledge_point || '';
+            document.getElementById('metaTeacher').value = question.metadata.teacher || '';
+            document.getElementById('questionContent').value = question.question || '';
+            document.getElementById('solutionContent').value = question.solution || '';
+            document.getElementById('answerContent').value = question.answer || '';
+            
+            // 重置预览状态
+            previewStates = { question: false, solution: false, answer: false };
+            document.querySelectorAll('textarea').forEach(t => t.classList.remove('hidden'));
+            document.querySelectorAll('.preview-box').forEach(p => p.classList.remove('active'));
+            
+            // 自动显示题目内容的预览（含数学公式）
+            setTimeout(() => {
+                togglePreview('question');
+                togglePreview('solution');
+                togglePreview('answer');
+            }, 100);
+        }
+        
+        async function saveQuestion() {
+            if (!currentQuestion) return;
+            
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '保存中...';
+            
+            const data = {
+                metadata: {
+                    id: document.getElementById('metaId').value,
+                    title: document.getElementById('metaTitle').value,
+                    question_type: document.getElementById('metaQuestionType').value,
+                    domain: document.getElementById('metaDomain').value,
+                    difficulty: document.getElementById('metaDifficulty').value,
+                    knowledge_point: document.getElementById('metaKnowledgePoint').value,
+                    batch: currentQuestion.metadata.batch || '',
+                    teacher: document.getElementById('metaTeacher').value
+                },
+                question: document.getElementById('questionContent').value,
+                solution: document.getElementById('solutionContent').value,
+                answer: document.getElementById('answerContent').value
+            };
+            
+            try {
+                const response = await fetch(`/api/question/${currentQuestion.filename}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('保存成功！', 'success');
+                    await loadQuestions();
+                } else {
+                    showMessage('保存失败：' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('保存失败：' + error.message, 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '保存修改';
+            }
+        }
+        
+        function showMessage(text, type = 'success') {
+            const message = document.createElement('div');
+            message.className = 'message';
+            message.textContent = text;
+            message.style.background = type === 'success' ? '#4caf50' : '#f44336';
+            document.body.appendChild(message);
+            
+            setTimeout(() => {
+                message.remove();
+            }, 3000);
+        }
+        
+        let searchTimeout;
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                const query = e.target.value;
+                if (query) {
+                    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                    const results = await response.json();
+                    renderQuestionList(results);
+                } else {
+                    renderQuestionList(allQuestions);
+                }
+            }, 300);
+        });
+        
+        document.getElementById('saveBtn').addEventListener('click', saveQuestion);
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                saveQuestion();
+            }
+        });
+        
+        loadQuestions();
+    </script>
+</body>
+</html>
+
