@@ -57,6 +57,37 @@
             font-size: 14px;
         }
         
+        .filter-buttons {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .filter-btn {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn.active {
+            background: #1976d2;
+            color: white;
+            border-color: #1976d2;
+        }
+        
+        .filter-btn:hover {
+            background: #f0f0f0;
+        }
+        
+        .filter-btn.active:hover {
+            background: #1565c0;
+        }
+        
         .question-list {
             flex: 1;
             overflow-y: auto;
@@ -414,6 +445,10 @@
     <div class="sidebar">
         <div class="search-box">
             <input type="text" id="searchInput" placeholder="搜索题目ID、标题或内容...">
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">全部题目</button>
+                <button class="filter-btn" data-filter="marked">⭐ 已标记</button>
+            </div>
         </div>
         <div class="question-list" id="questionList">
             <div class="loading">加载中...</div>
@@ -432,6 +467,7 @@
             <div class="editor-header">
                 <h2 id="editorTitle">编辑题目</h2>
                 <div class="btn-group">
+                    <button class="jump-btn" id="toggleMarkBtn" onclick="toggleMark()">☆ 标记为好题</button>
                     <button class="jump-btn" onclick="toggleAllPreview()">👁️ 全部预览</button>
                     <button class="jump-btn" onclick="scrollToSection('top')">⬆️ 顶部</button>
                     <button class="jump-btn" onclick="scrollToSection('answer')">⬇️ 答案</button>
@@ -508,6 +544,7 @@
     <script>
         let allQuestions = [];
         let currentQuestion = null;
+        let currentFilter = 'all';
         let previewStates = {
             question: false,
             solution: false,
@@ -611,7 +648,7 @@
             
             listEl.innerHTML = questions.map(q => `
                 <div class="question-item" data-filename="${q.filename}">
-                    <div class="question-id">题目 ${q.metadata.id}</div>
+                    <div class="question-id">${q.marked ? '⭐ ' : ''}题目 ${q.metadata.id}</div>
                     <div class="question-title">${q.metadata.title}</div>
                 </div>
             `).join('');
@@ -650,6 +687,9 @@
             document.getElementById('questionContent').value = question.question || '';
             document.getElementById('solutionContent').value = question.solution || '';
             document.getElementById('answerContent').value = question.answer || '';
+            
+            // 更新标记按钮状态
+            updateMarkButton();
             
             // 重置预览状态
             previewStates = { question: false, solution: false, answer: false };
@@ -745,6 +785,60 @@
                 e.preventDefault();
                 saveQuestion();
             }
+        });
+        
+        // 切换标记状态
+        async function toggleMark() {
+            if (!currentQuestion) return;
+            
+            try {
+                const response = await fetch(`/api/question/${currentQuestion.filename}/toggle-mark`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentQuestion.marked = result.marked;
+                    updateMarkButton();
+                    await loadQuestions(); // 刷新列表
+                    showMessage(result.marked ? '已标记为好题！' : '已取消标记', 'success');
+                }
+            } catch (error) {
+                showMessage('标记失败：' + error.message, 'error');
+            }
+        }
+        
+        // 更新标记按钮状态
+        function updateMarkButton() {
+            const btn = document.getElementById('toggleMarkBtn');
+            if (currentQuestion && currentQuestion.marked) {
+                btn.innerHTML = '⭐ 取消标记';
+                btn.style.background = '#ff9800';
+            } else {
+                btn.innerHTML = '☆ 标记为好题';
+                btn.style.background = '#4caf50';
+            }
+        }
+        
+        // 筛选功能
+        async function applyFilter() {
+            if (currentFilter === 'marked') {
+                const response = await fetch('/api/marked');
+                const marked = await response.json();
+                renderQuestionList(marked);
+            } else {
+                renderQuestionList(allQuestions);
+            }
+        }
+        
+        // 筛选按钮事件
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                applyFilter();
+            });
         });
         
         loadQuestions();

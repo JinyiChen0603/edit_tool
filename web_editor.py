@@ -50,7 +50,8 @@ class Question:
             'metadata': self.metadata,
             'question': self.question,
             'solution': self.solution,
-            'answer': self.answer
+            'answer': self.answer,
+            'marked': self.metadata.get('marked', 'false').lower() == 'true'
         }
     
     def save(self, metadata, question, solution, answer):
@@ -144,6 +145,33 @@ def update_question(filename):
         return jsonify({'success': True, 'message': '保存成功'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/marked', methods=['GET'])
+def list_marked():
+    """列出所有标记的题目"""
+    questions = get_all_questions()
+    marked = [q for q in questions if q.get('marked', False)]
+    return jsonify(marked)
+
+@app.route('/api/question/<filename>/toggle-mark', methods=['POST'])
+def toggle_mark(filename):
+    """切换题目标记状态"""
+    filepath = MATHS_DIR / filename
+    if not filepath.exists():
+        return jsonify({'error': 'File not found'}), 404
+    
+    q = Question(filepath)
+    current_marked = q.metadata.get('marked', 'false').lower() == 'true'
+    q.metadata['marked'] = 'false' if current_marked else 'true'
+    
+    q.save(
+        metadata=q.metadata,
+        question=q.question,
+        solution=q.solution,
+        answer=q.answer
+    )
+    
+    return jsonify({'success': True, 'marked': not current_marked})
 
 if __name__ == '__main__':
     # host='0.0.0.0' 允许局域网访问
