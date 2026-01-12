@@ -360,13 +360,38 @@
             font-size: 1.1em !important;
         }
         
-        /* 特殊符号和列表格式 */
+        /* LaTeX环境渲染样式 - 增强版 */
         .preview-box ul, .preview-box ol {
-            margin-left: 20px;
-            margin-bottom: 10px;
+            margin-left: 25px;
+            margin-bottom: 12px;
+            margin-top: 8px;
+            padding-left: 0;
+        }
+        
+        .preview-box ul {
+            list-style-type: disc;
+        }
+        
+        .preview-box ol {
+            list-style-type: decimal;
         }
         
         .preview-box li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+        
+        .preview-box li strong {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        /* 处理嵌套列表 */
+        .preview-box ul ul,
+        .preview-box ol ul,
+        .preview-box ul ol,
+        .preview-box ol ol {
+            margin-top: 5px;
             margin-bottom: 5px;
         }
         
@@ -551,6 +576,90 @@
             answer: false
         };
         
+        // LaTeX环境预处理函数 - 安全地转换LaTeX环境为HTML
+        function preprocessLatexEnvironments(content) {
+            try {
+                // 1. 处理 itemize 环境（无序列表）
+                content = content.replace(/\\begin\{itemize\}([\s\S]*?)\\end\{itemize\}/g, function(match, items) {
+                    // 提取每个 \item
+                    const itemList = items.match(/\\item\s+([^\n]*(?:\n(?!\\item)[^\n]*)*)/g);
+                    if (itemList) {
+                        const htmlItems = itemList.map(item => {
+                            const text = item.replace(/\\item\s+/, '').trim();
+                            return `<li>${text}</li>`;
+                        }).join('\n');
+                        return `<ul>${htmlItems}</ul>`;
+                    }
+                    return match; // 如果解析失败，返回原文
+                });
+                
+                // 2. 处理 enumerate 环境（有序列表）
+                content = content.replace(/\\begin\{enumerate\}([\s\S]*?)\\end\{enumerate\}/g, function(match, items) {
+                    const itemList = items.match(/\\item\s+([^\n]*(?:\n(?!\\item)[^\n]*)*)/g);
+                    if (itemList) {
+                        const htmlItems = itemList.map(item => {
+                            const text = item.replace(/\\item\s+/, '').trim();
+                            return `<li>${text}</li>`;
+                        }).join('\n');
+                        return `<ol>${htmlItems}</ol>`;
+                    }
+                    return match;
+                });
+                
+                // 3. 处理其他常见LaTeX命令
+                content = content.replace(/\\textbf\{([^}]+)\}/g, '<strong>$1</strong>');
+                content = content.replace(/\\textit\{([^}]+)\}/g, '<em>$1</em>');
+                content = content.replace(/\\emph\{([^}]+)\}/g, '<em>$1</em>');
+                content = content.replace(/\\medskip/g, '<div style="height: 12px;"></div>');
+                content = content.replace(/\\bigskip/g, '<div style="height: 20px;"></div>');
+                content = content.replace(/\\smallskip/g, '<div style="height: 6px;"></div>');
+                
+                // 4. 处理 \dots 和 \ldots
+                content = content.replace(/\\dots/g, '…');
+                content = content.replace(/\\ldots/g, '…');
+                
+                // 5. 处理章节和子章节标题
+                content = content.replace(/\\section\*\{([^}]+)\}/g, '<h2 style="font-size: 1.3em; font-weight: bold; margin: 16px 0 10px 0; color: #333;">$1</h2>');
+                content = content.replace(/\\section\{([^}]+)\}/g, '<h2 style="font-size: 1.3em; font-weight: bold; margin: 16px 0 10px 0; color: #333;">$1</h2>');
+                content = content.replace(/\\subsection\*\{([^}]+)\}/g, '<h3 style="font-size: 1.15em; font-weight: bold; margin: 14px 0 8px 0; color: #444;">$1</h3>');
+                content = content.replace(/\\subsection\{([^}]+)\}/g, '<h3 style="font-size: 1.15em; font-weight: bold; margin: 14px 0 8px 0; color: #444;">$1</h3>');
+                content = content.replace(/\\subsubsection\*\{([^}]+)\}/g, '<h4 style="font-size: 1.05em; font-weight: bold; margin: 12px 0 6px 0; color: #555;">$1</h4>');
+                content = content.replace(/\\subsubsection\{([^}]+)\}/g, '<h4 style="font-size: 1.05em; font-weight: bold; margin: 12px 0 6px 0; color: #555;">$1</h4>');
+                
+                // 6. 处理更多文本格式命令
+                content = content.replace(/\\textsc\{([^}]+)\}/g, '<span style="font-variant: small-caps;">$1</span>');
+                content = content.replace(/\\underline\{([^}]+)\}/g, '<u>$1</u>');
+                content = content.replace(/\\texttt\{([^}]+)\}/g, '<code style="background: #f0f0f0; padding: 2px 4px; font-family: monospace; border-radius: 3px;">$1</code>');
+                
+                // 7. 处理换行和间距
+                content = content.replace(/\\newline/g, '<br>');
+                // 注意：\\ 需要在处理完其他命令后处理，避免干扰其他转换
+                content = content.replace(/\\\\\s*(?![a-zA-Z])/g, '<br>'); // 只匹配后面不跟字母的 \\
+                content = content.replace(/\\noindent/g, '');
+                content = content.replace(/\\vspace\{[^}]+\}/g, '<div style="height: 10px;"></div>');
+                content = content.replace(/\\hspace\{[^}]+\}/g, '<span style="display: inline-block; width: 10px;"></span>');
+                
+                // 8. 处理特殊符号和标点
+                content = content.replace(/---/g, '—'); // em dash
+                content = content.replace(/--/g, '–'); // en dash
+                content = content.replace(/\\_/g, '_'); // 下划线转义
+                content = content.replace(/\\&/g, '&'); // & 符号转义
+                content = content.replace(/\\%/g, '%'); // % 符号转义
+                content = content.replace(/\\#/g, '#'); // # 符号转义
+                
+                // 9. 处理引号
+                content = content.replace(/``/g, '"'); // 左双引号
+                content = content.replace(/''/g, '"'); // 右双引号
+                content = content.replace(/`/g, "'"); // 左单引号
+                
+            } catch (error) {
+                console.warn('LaTeX环境预处理出错，返回原内容:', error);
+                // 出错时返回原内容，确保不会崩溃
+            }
+            
+            return content;
+        }
+        
         // 切换预览/编辑模式
         function togglePreview(section) {
             const textarea = document.getElementById(section + 'Content');
@@ -565,6 +674,10 @@
                 
                 // 处理文本内容，保留换行和段落
                 let content = textarea.value;
+                
+                // *** 新增：预处理LaTeX环境 ***
+                content = preprocessLatexEnvironments(content);
+                
                 // 将双换行转换为段落
                 content = content.replace(/\n\n+/g, '</p><p>');
                 // 将单换行转换为 <br>
