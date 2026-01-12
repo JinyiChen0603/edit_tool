@@ -88,6 +88,33 @@
             background: #1565c0;
         }
         
+        .create-btn {
+            width: 100%;
+            padding: 10px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        
+        .create-btn:hover {
+            background: #45a049;
+        }
+        
+        .create-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .create-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
         .question-list {
             flex: 1;
             overflow-y: auto;
@@ -158,6 +185,97 @@
         .save-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
+        }
+        
+        .delete-btn {
+            padding: 10px 30px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .delete-btn:hover {
+            background: #d32f2f;
+        }
+        
+        .delete-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        /* 确认对话框样式 */
+        .confirm-dialog {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .confirm-dialog.active {
+            display: flex;
+        }
+        
+        .confirm-box {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        .confirm-box h3 {
+            margin: 0 0 15px 0;
+            color: #f44336;
+        }
+        
+        .confirm-box p {
+            margin: 0 0 25px 0;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .confirm-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .confirm-btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .confirm-btn.cancel {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .confirm-btn.cancel:hover {
+            background: #d0d0d0;
+        }
+        
+        .confirm-btn.confirm {
+            background: #f44336;
+            color: white;
+        }
+        
+        .confirm-btn.confirm:hover {
+            background: #d32f2f;
         }
         
         .jump-btn {
@@ -474,6 +592,7 @@
                 <button class="filter-btn active" data-filter="all">全部题目</button>
                 <button class="filter-btn" data-filter="marked">⭐ 已标记</button>
             </div>
+            <button class="create-btn" onclick="createNewQuestion()">➕ 新建题目</button>
         </div>
         <div class="question-list" id="questionList">
             <div class="loading">加载中...</div>
@@ -496,6 +615,7 @@
                     <button class="jump-btn" onclick="toggleAllPreview()">👁️ 全部预览</button>
                     <button class="jump-btn" onclick="scrollToSection('top')">⬆️ 顶部</button>
                     <button class="jump-btn" onclick="scrollToSection('answer')">⬇️ 答案</button>
+                    <button class="delete-btn" id="deleteBtn" onclick="confirmDelete()">🗑️ 删除题目</button>
                     <button class="save-btn" id="saveBtn">保存修改</button>
                 </div>
             </div>
@@ -742,6 +862,117 @@
             }
         }
         
+        // 创建新题目
+        async function createNewQuestion() {
+            const createBtn = document.querySelector('.create-btn');
+            const originalText = createBtn.textContent;
+            
+            createBtn.disabled = true;
+            createBtn.textContent = '创建中...';
+            
+            try {
+                const response = await fetch('/api/question/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`成功创建题目 ${result.id}！`, 'success');
+                    // 重新加载题目列表
+                    await loadQuestions();
+                    // 自动加载新创建的题目
+                    setTimeout(() => {
+                        loadQuestion(result.filename);
+                        // 高亮新创建的题目
+                        const items = document.querySelectorAll('.question-item');
+                        items.forEach(item => {
+                            if (item.dataset.filename === result.filename) {
+                                item.classList.add('active');
+                                item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            } else {
+                                item.classList.remove('active');
+                            }
+                        });
+                    }, 500);
+                } else {
+                    showMessage('创建失败：' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('创建失败：' + error.message, 'error');
+            } finally {
+                createBtn.disabled = false;
+                createBtn.textContent = originalText;
+            }
+        }
+        
+        // 显示删除确认对话框
+        function confirmDelete() {
+            if (!currentQuestion) return;
+            
+            const questionId = currentQuestion.metadata.id || '未知';
+            const questionTitle = currentQuestion.metadata.title || '无标题';
+            document.getElementById('confirmMessage').innerHTML = 
+                `确定要删除题目 <strong>${questionId}</strong> 吗？<br><strong>${questionTitle}</strong><br><br>此操作不可恢复！`;
+            document.getElementById('confirmDialog').classList.add('active');
+        }
+        
+        // 关闭确认对话框
+        function closeConfirmDialog() {
+            document.getElementById('confirmDialog').classList.remove('active');
+        }
+        
+        // 执行删除操作
+        async function executeDelete() {
+            if (!currentQuestion) return;
+            
+            const deleteBtn = document.getElementById('deleteBtn');
+            const originalText = deleteBtn.textContent;
+            
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '删除中...';
+            
+            try {
+                const response = await fetch(`/api/question/${currentQuestion.filename}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    closeConfirmDialog();
+                    
+                    // 关闭编辑器
+                    document.getElementById('emptyState').style.display = 'flex';
+                    document.getElementById('editorSection').style.display = 'none';
+                    currentQuestion = null;
+                    
+                    // 重新加载题目列表
+                    await loadQuestions();
+                } else {
+                    showMessage('删除失败：' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('删除失败：' + error.message, 'error');
+            } finally {
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = originalText;
+                closeConfirmDialog();
+            }
+        }
+        
+        // 点击对话框外部关闭
+        document.addEventListener('click', (e) => {
+            const dialog = document.getElementById('confirmDialog');
+            if (e.target === dialog) {
+                closeConfirmDialog();
+            }
+        });
+        
         async function loadQuestions() {
             try {
                 const response = await fetch('/api/questions');
@@ -956,6 +1187,18 @@
         
         loadQuestions();
     </script>
+    
+    <!-- 删除确认对话框 -->
+    <div id="confirmDialog" class="confirm-dialog">
+        <div class="confirm-box">
+            <h3>⚠️ 确认删除</h3>
+            <p id="confirmMessage">确定要删除这道题目吗？<br>此操作不可恢复！</p>
+            <div class="confirm-buttons">
+                <button class="confirm-btn cancel" onclick="closeConfirmDialog()">取消</button>
+                <button class="confirm-btn confirm" onclick="executeDelete()">确认删除</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
 

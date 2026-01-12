@@ -173,6 +173,86 @@ def toggle_mark(filename):
     
     return jsonify({'success': True, 'marked': not current_marked})
 
+@app.route('/api/question/create', methods=['POST'])
+def create_question():
+    """创建新题目"""
+    try:
+        # 获取下一个可用的ID
+        existing_ids = []
+        for md_file in MATHS_DIR.glob('q_*.md'):
+            match = re.match(r'q_(\d+)\.md', md_file.name)
+            if match:
+                existing_ids.append(int(match.group(1)))
+        
+        next_id = max(existing_ids) + 1 if existing_ids else 1
+        
+        # 创建新文件名
+        new_filename = f'q_{next_id}.md'
+        new_filepath = MATHS_DIR / new_filename
+        
+        # 检查文件是否已存在
+        if new_filepath.exists():
+            return jsonify({'error': '文件已存在'}), 400
+        
+        # 创建默认内容
+        default_content = f"""---
+id: {next_id}
+title: 
+question_type: 
+domain: 
+difficulty: 
+knowledge_point: 
+batch: 
+teacher: 
+marked: false
+---
+
+## 题目
+
+
+## 解答
+
+
+## 答案
+
+"""
+        
+        # 写入文件
+        with open(new_filepath, 'w', encoding='utf-8') as f:
+            f.write(default_content)
+        
+        return jsonify({
+            'success': True,
+            'filename': new_filename,
+            'id': next_id,
+            'message': f'成功创建题目 {next_id}'
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/question/<filename>', methods=['DELETE'])
+def delete_question(filename):
+    """删除题目"""
+    filepath = MATHS_DIR / filename
+    if not filepath.exists():
+        return jsonify({'error': '文件不存在'}), 404
+    
+    try:
+        # 获取题目ID用于显示
+        q = Question(filepath)
+        question_id = q.metadata.get('id', filename)
+        
+        # 删除文件
+        filepath.unlink()
+        
+        return jsonify({
+            'success': True,
+            'message': f'成功删除题目 {question_id}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     # host='0.0.0.0' 允许局域网访问
     # port=5000 端口号
