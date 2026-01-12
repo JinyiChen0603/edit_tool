@@ -253,6 +253,159 @@ def delete_question(filename):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/question/import', methods=['POST'])
+def import_question():
+    """导入题目（支持多种格式）"""
+    try:
+        data = request.json
+        content = data.get('content', '')
+        
+        if not content:
+            return jsonify({'error': '导入内容为空'}), 400
+        
+        # 预处理：统一换行符，去除BOM
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+        # 去除UTF-8 BOM
+        if content.startswith('\ufeff'):
+            content = content[1:]
+        content = content.strip()
+        
+        # 获取下一个可用的ID
+        existing_ids = []
+        for md_file in MATHS_DIR.glob('q_*.md'):
+            match = re.match(r'q_(\d+)\.md', md_file.name)
+            if match:
+                existing_ids.append(int(match.group(1)))
+        
+        next_id = max(existing_ids) + 1 if existing_ids else 1
+        
+        # 初始化变量
+        metadata = {
+            'id': str(next_id),
+            'title': '',
+            'question_type': '',
+            'domain': '',
+            'difficulty': '',
+            'knowledge_point': '',
+            'batch': '',
+            'teacher': '',
+            'marked': 'false'
+        }
+        question = ""
+        solution = ""
+        answer = ""
+        has_yaml = False
+        
+        # 尝试解析不同格式
+        try:
+            # 改进的YAML匹配：允许分隔符前后有空格
+            yaml_match = re.match(r'^\s*---\s*\n(.*?)\n\s*---\s*\n', content, re.DOTALL)
+            if not yaml_match:
+                # 如果还是匹配不到，尝试更宽松的匹配
+                yaml_match = re.search(r'---\s*\n(.*?)\n\s*---', content, re.DOTALL)
+            
+            if yaml_match:
+                # 标准格式：有YAML头部
+                has_yaml = True
+                yaml_content = yaml_match.group(1)
+                parsed_metadata = {}
+                for line in yaml_content.split('\n'):
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        parsed_metadata[key.strip()] = value.strip()
+                
+                # 更新元数据（保留默认值作为后备）
+                for key in metadata.keys():
+                    if key != 'id' and key in parsed_metadata:
+                        metadata[key] = parsed_metadata[key]
+                
+                # 提取内容部分
+                rest_content = content[yaml_match.end():]
+                
+                # 提取题目（允许章节标题前后有空格）
+                question_match = re.search(r'##\s*题目\s*\n(.*?)(?=\n\s*##\s*|$)', rest_content, re.DOTALL)
+                if question_match:
+                    question = question_match.group(1).strip()
+                
+                # 提取解答
+                solution_match = re.search(r'##\s*解答\s*\n(.*?)(?=\n\s*##\s*|$)', rest_content, re.DOTALL)
+                if solution_match:
+                    solution = solution_match.group(1).strip()
+                
+                # 提取答案
+                answer_match = re.search(r'##\s*答案\s*\n(.*?)$', rest_content, re.DOTALL)
+                if answer_match:
+                    answer = answer_match.group(1).strip()
+                    
+            else:
+                # 无YAML头部：智能识别
+                # 尝试识别标题（第一行或第一个#标题）
+                lines = content.strip().split('\n')
+                first_line = lines[0] if lines else ''
+                
+                # 尝试从第一行提取标题
+                if first_line.startswith('#'):
+                    metadata['title'] = first_line.lstrip('#').strip()
+                    content = '\n'.join(lines[1:])
+                
+                # 尝试识别章节
+                if '## 题目' in content or '##题目' in content:
+                    # 有章节标记但没有YAML
+                    question_match = re.search(r'##\s*题目\s*\n(.*?)(?=\n\s*##\s*|$)', content, re.DOTALL)
+                    if question_match:
+                        question = question_match.group(1).strip()
+                    
+                    solution_match = re.search(r'##\s*解答\s*\n(.*?)(?=\n\s*##\s*|$)', content, re.DOTALL)
+                    if solution_match:
+                        solution = solution_match.group(1).strip()
+                    
+                    answer_match = re.search(r'##\s*答案\s*\n(.*?)$', content, re.DOTALL)
+                    if answer_match:
+                        answer = answer_match.group(1).strip()
+                    
+                    if not metadata['title']:
+                        metadata['title'] = '导入的题目（需手动整理）'
+                else:
+                    # 完全自由格式：全部放入题目部分
+                    question = content.strip()
+                    metadata['title'] = '导入的题目（需手动整理）'
+                    
+        except Exception as e:
+            # 解析失败，使用手动模式
+            question = content.strip()
+            metadata['title'] = '导入的题目（解析失败，需手动整理）'
+        
+        # 创建新文件
+        new_filename = f'q_{next_id}.md'
+        new_filepath = MATHS_DIR / new_filename
+        
+        if new_filepath.exists():
+            return jsonify({'error': '文件已存在'}), 400
+        
+        # 构建新内容
+        yaml_lines = ['---']
+        for key, value in metadata.items():
+            yaml_lines.append(f'{key}: {value}')
+        yaml_lines.append('---')
+        
+        new_content = '\n'.join(yaml_lines)
+        new_content += f'\n\n## 题目\n{question}\n\n## 解答\n{solution}\n\n## 答案\n{answer}\n'
+        
+        # 写入文件
+        with open(new_filepath, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        
+        return jsonify({
+            'success': True,
+            'filename': new_filename,
+            'id': next_id,
+            'message': f'成功导入题目 {next_id}',
+            'warning': '请检查并完善题目信息' if not has_yaml else None
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     # host='0.0.0.0' 允许局域网访问
     # port=5000 端口号

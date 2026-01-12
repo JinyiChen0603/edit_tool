@@ -115,6 +115,177 @@
             cursor: not-allowed;
         }
         
+        .import-btn {
+            width: 100%;
+            padding: 10px;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        
+        .import-btn:hover {
+            background: #1976d2;
+        }
+        
+        .import-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        /* 导入对话框样式 */
+        .import-dialog {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .import-dialog.active {
+            display: flex;
+        }
+        
+        .import-box {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .import-box h3 {
+            margin: 0 0 20px 0;
+            color: #2196f3;
+        }
+        
+        .import-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .import-tab {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        
+        .import-tab.active {
+            color: #2196f3;
+            border-bottom-color: #2196f3;
+            font-weight: bold;
+        }
+        
+        .import-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .import-tab-content {
+            display: none;
+        }
+        
+        .import-tab-content.active {
+            display: block;
+        }
+        
+        .file-upload-area {
+            border: 2px dashed #2196f3;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .file-upload-area:hover {
+            background: #f0f8ff;
+            border-color: #1976d2;
+        }
+        
+        .file-upload-area.dragover {
+            background: #e3f2fd;
+            border-color: #1976d2;
+        }
+        
+        .file-upload-area input[type="file"] {
+            display: none;
+        }
+        
+        .paste-area {
+            width: 100%;
+            min-height: 300px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+        
+        .import-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .import-buttons button {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .import-buttons .cancel {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .import-buttons .cancel:hover {
+            background: #d0d0d0;
+        }
+        
+        .import-buttons .confirm {
+            background: #2196f3;
+            color: white;
+        }
+        
+        .import-buttons .confirm:hover {
+            background: #1976d2;
+        }
+        
+        .import-buttons .confirm:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
         .question-list {
             flex: 1;
             overflow-y: auto;
@@ -593,6 +764,7 @@
                 <button class="filter-btn" data-filter="marked">⭐ 已标记</button>
             </div>
             <button class="create-btn" onclick="createNewQuestion()">➕ 新建题目</button>
+            <button class="import-btn" onclick="openImportDialog()">📥 导入题目</button>
         </div>
         <div class="question-list" id="questionList">
             <div class="loading">加载中...</div>
@@ -862,6 +1034,160 @@
             }
         }
         
+        let importContent = '';
+        let currentImportTab = 'file';
+        
+        // 显示格式示例
+        function showFormatExample() {
+            const example = `---
+id: 任意数字（会自动替换）
+title: 题目标题
+question_type: 数学
+domain: 高中数学竞赛代数
+difficulty: 中学
+knowledge_point: 具体知识点
+batch: 01_第一批100题
+teacher: 出题老师
+marked: false
+---
+
+## 题目
+在这里输入题目内容...
+
+支持LaTeX公式：$x^2 + y^2 = 1$
+
+## 解答
+在这里输入解答过程...
+
+可以使用多行和复杂的LaTeX环境。
+
+## 答案
+在这里输入最终答案...`;
+            
+            alert('标准格式示例：\n\n' + example);
+        }
+        
+        // 打开导入对话框
+        function openImportDialog() {
+            document.getElementById('importDialog').classList.add('active');
+            importContent = '';
+            document.getElementById('selectedFileName').textContent = '';
+            document.getElementById('pasteArea').value = '';
+            switchImportTab('file');
+        }
+        
+        // 关闭导入对话框
+        function closeImportDialog() {
+            document.getElementById('importDialog').classList.remove('active');
+        }
+        
+        // 切换导入标签页
+        function switchImportTab(tab) {
+            currentImportTab = tab;
+            
+            // 更新标签按钮状态
+            document.querySelectorAll('.import-tab').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // 更新内容区域
+            document.querySelectorAll('.import-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            if (tab === 'file') {
+                document.getElementById('importTabFile').classList.add('active');
+            } else {
+                document.getElementById('importTabPaste').classList.add('active');
+            }
+        }
+        
+        // 处理文件选择
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.name.endsWith('.md')) {
+                showMessage('请选择 .md 格式的文件', 'error');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                importContent = e.target.result;
+                document.getElementById('selectedFileName').textContent = `已选择：${file.name}`;
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+        
+        // 执行导入
+        async function executeImport() {
+            let content = '';
+            
+            if (currentImportTab === 'file') {
+                content = importContent;
+            } else {
+                content = document.getElementById('pasteArea').value;
+            }
+            
+            if (!content.trim()) {
+                showMessage('请先选择文件或粘贴内容', 'error');
+                return;
+            }
+            
+            const confirmBtn = document.getElementById('importConfirmBtn');
+            const originalText = confirmBtn.textContent;
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '导入中...';
+            
+            try {
+                const response = await fetch('/api/question/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: content })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    let message = result.message;
+                    if (result.warning) {
+                        message += '\n⚠️ ' + result.warning;
+                    }
+                    showMessage(message, 'success');
+                    closeImportDialog();
+                    
+                    // 重新加载题目列表
+                    await loadQuestions();
+                    
+                    // 自动加载新导入的题目
+                    setTimeout(() => {
+                        loadQuestion(result.filename);
+                        // 高亮新导入的题目
+                        const items = document.querySelectorAll('.question-item');
+                        items.forEach(item => {
+                            if (item.dataset.filename === result.filename) {
+                                item.classList.add('active');
+                                item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            } else {
+                                item.classList.remove('active');
+                            }
+                        });
+                    }, 500);
+                } else {
+                    showMessage('导入失败：' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('导入失败：' + error.message, 'error');
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = originalText;
+            }
+        }
+        
         // 创建新题目
         async function createNewQuestion() {
             const createBtn = document.querySelector('.create-btn');
@@ -967,9 +1293,14 @@
         
         // 点击对话框外部关闭
         document.addEventListener('click', (e) => {
-            const dialog = document.getElementById('confirmDialog');
-            if (e.target === dialog) {
+            const confirmDialog = document.getElementById('confirmDialog');
+            const importDialog = document.getElementById('importDialog');
+            
+            if (e.target === confirmDialog) {
                 closeConfirmDialog();
+            }
+            if (e.target === importDialog) {
+                closeImportDialog();
             }
         });
         
@@ -1186,6 +1517,38 @@
         });
         
         loadQuestions();
+        
+        // 文件拖拽支持（页面加载后初始化）
+        setTimeout(() => {
+            const uploadArea = document.getElementById('fileUploadArea');
+            if (uploadArea) {
+                uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.add('dragover');
+                });
+                
+                uploadArea.addEventListener('dragleave', () => {
+                    uploadArea.classList.remove('dragover');
+                });
+                
+                uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    uploadArea.classList.remove('dragover');
+                    
+                    const file = e.dataTransfer.files[0];
+                    if (file && file.name.endsWith('.md')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            importContent = e.target.result;
+                            document.getElementById('selectedFileName').textContent = `已选择：${file.name}`;
+                        };
+                        reader.readAsText(file, 'UTF-8');
+                    } else {
+                        showMessage('请拖拽 .md 格式的文件', 'error');
+                    }
+                });
+            }
+        }, 100);
     </script>
     
     <!-- 删除确认对话框 -->
@@ -1196,6 +1559,54 @@
             <div class="confirm-buttons">
                 <button class="confirm-btn cancel" onclick="closeConfirmDialog()">取消</button>
                 <button class="confirm-btn confirm" onclick="executeDelete()">确认删除</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 导入题目对话框 -->
+    <div id="importDialog" class="import-dialog">
+        <div class="import-box">
+            <h3>📥 导入题目</h3>
+            
+            <!-- 格式提示 -->
+            <div class="import-help" style="background: #f0f8ff; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 3px solid #2196f3;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; color: #2196f3;">💡 支持的导入格式：</p>
+                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #666; line-height: 1.8;">
+                    <li><strong>标准格式</strong>：包含完整YAML头部和三个章节</li>
+                    <li><strong>部分格式</strong>：有章节标记但缺少元数据（自动创建默认元数据）</li>
+                    <li><strong>自由格式</strong>：任意文本内容（导入后需手动整理）</li>
+                </ul>
+                <p style="margin: 10px 0 0 0; font-size: 12px; color: #999;">
+                    <a href="#" onclick="showFormatExample(); return false;" style="color: #2196f3; text-decoration: none;">查看标准格式示例 →</a>
+                </p>
+            </div>
+            
+            <div class="import-tabs">
+                <button class="import-tab active" onclick="switchImportTab('file')">上传文件</button>
+                <button class="import-tab" onclick="switchImportTab('paste')">粘贴内容</button>
+            </div>
+            
+            <div class="import-content">
+                <!-- 文件上传 -->
+                <div id="importTabFile" class="import-tab-content active">
+                    <div class="file-upload-area" id="fileUploadArea" onclick="document.getElementById('fileInput').click()">
+                        <input type="file" id="fileInput" accept=".md" onchange="handleFileSelect(event)">
+                        <p style="font-size: 48px; margin: 0;">📄</p>
+                        <p style="margin: 10px 0; font-size: 16px; font-weight: bold;">点击选择或拖拽文件到此处</p>
+                        <p style="margin: 0; color: #666; font-size: 14px;">支持 .md 格式的markdown文件</p>
+                        <p id="selectedFileName" style="margin-top: 15px; color: #2196f3; font-weight: bold;"></p>
+                    </div>
+                </div>
+                
+                <!-- 粘贴内容 -->
+                <div id="importTabPaste" class="import-tab-content">
+                    <textarea id="pasteArea" class="paste-area" placeholder="在此粘贴完整的题目markdown内容...&#10;&#10;包含YAML头部和题目、解答、答案三个部分"></textarea>
+                </div>
+            </div>
+            
+            <div class="import-buttons">
+                <button class="cancel" onclick="closeImportDialog()">取消</button>
+                <button class="confirm" id="importConfirmBtn" onclick="executeImport()">确认导入</button>
             </div>
         </div>
     </div>
